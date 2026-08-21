@@ -23,12 +23,12 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final Map<String, dynamic> result =
+      final String result =
           await CameraService.createCameraSession();
 
       setState(() {
-        childUrl = result["child_url"]?.toString();
-        sessionId = result["session_id"]?.toString();
+        sessionId = result;
+        childUrl = result;
       });
     } catch (e) {
       setState(() {
@@ -87,10 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
             if (errorMessage != null)
-              Text(
-                errorMessage!,
-                style: const TextStyle(color: Colors.red),
-              ),
+              Text(errorMessage!),
           ],
         ),
       ),
