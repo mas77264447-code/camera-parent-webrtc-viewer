@@ -6,6 +6,10 @@ workflows:
       flutter: stable
 
     scripts:
+      - name: Clean Flutter
+        script: |
+          flutter clean
+
       - name: Get Flutter packages
         script: |
           flutter pub get
