@@ -5,6 +5,17 @@ class CameraService {
   static IO.Socket? socket;
   static RTCPeerConnection? pc;
 
+  static Future<String> createCameraSession() async {
+    final stream = await navigator.mediaDevices.getUserMedia({
+      'video': true,
+      'audio': true,
+    });
+
+    await startWebrtc('camera-room', stream);
+
+    return 'camera-room';
+  }
+
   static Future<void> startWebrtc(String room, MediaStream stream) async {
     socket = IO.io('https://camera-parent-server.onrender.com', {
       'transports': ['websocket']
@@ -30,14 +41,18 @@ class CameraService {
 
     socket!.on('answer', (data) async {
       await pc!.setRemoteDescription(
-        RTCSessionDescription(data['sdp'], data['type'])
+        RTCSessionDescription(data['sdp'], data['type']),
       );
     });
 
     socket!.on('ice', (data) async {
-      await pc!.addCandidate(RTCIceCandidate(
-        data['candidate'], data['sdpMid'], data['sdpMLineIndex']
-      ));
+      await pc!.addCandidate(
+        RTCIceCandidate(
+          data['candidate'],
+          data['sdpMid'],
+          data['sdpMLineIndex'],
+        ),
+      );
     });
 
     final offer = await pc!.createOffer();
