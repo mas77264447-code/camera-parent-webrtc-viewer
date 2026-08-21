@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><title>Live Camera Viewer</title>
+<style>body{background:#111;color:#fff;text-align:center;font-family:Arial}video{width:95%;max-width:900px;background:#000;border-radius:12px}button{padding:10px 20px;margin:10px}</style>
+</head>
+<body>
+<h2>👶 Live Camera</h2>
+<video id="video" autoplay playsinline controls></video>
+<div id="status">Connecting...</div>
+<button onclick="document.getElementById('video').requestFullscreen()">Fullscreen</button>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket=io();
+const parts=location.pathname.split('/').filter(Boolean);
+const room=parts[parts.length-1];
+const video=document.getElementById('video');
+const status=document.getElementById('status');
+const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+let joined=false;
+
+socket.emit('join',room);
+joined=true;
+
+pc.ontrack=(e)=>{video.srcObject=e.streams[0];status.textContent='🟢 Live: '+room;};
+pc.onicecandidate=(e)=>{if(e.candidate)socket.emit('ice',e.candidate);};
+
+socket.on('offer',async(offer)=>{
+ await pc.setRemoteDescription(offer);
+ const answer=await pc.createAnswer();
+ await pc.setLocalDescription(answer);
+ socket.emit('answer',answer);
+});
+
+socket.on('ice',async(c)=>{try{await pc.addIceCandidate(c)}catch(e){}});
+socket.on('peer-left',()=>status.textContent='🔴 Child camera disconnected');
+</script>
+</body>
+</html>

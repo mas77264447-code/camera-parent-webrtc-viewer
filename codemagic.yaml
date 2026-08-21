@@ -1,12 +1,12 @@
 workflows:
-  flutter_android:
-    name: Flutter Android Build
+  android-release:
+    name: Camera Parent Android APK
 
     environment:
       flutter: stable
 
     scripts:
-      - name: Install dependencies
+      - name: Get Flutter packages
         script: |
           flutter pub get
 
