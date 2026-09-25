@@ -29,6 +29,14 @@ class MainActivity : FlutterActivity() {
         private const val BATTERY_OPTIMIZATION_CHANNEL =
             "camera_parent/battery_optimization"
 
+        // ✅ إصلاح: كانت هذه القناة مسجَّلة فقط في نسخة "child"، بينما
+        // device_files_screen.dart (شاشة تصفح الملفات على جهاز الوالد)
+        // تستدعيها لفتح إعدادات "الوصول لجميع الملفات" على جهاز الوالد
+        // نفسه (لحفظ الملفات المُنزَّلة من جهاز الطفل). كان هذا يسبب
+        // MissingPluginException لأن flavor "parent" لم يكن يطبّقها.
+        private const val MANAGE_STORAGE_CHANNEL =
+            "camera_parent/manage_storage"
+
         private const val REQUEST_ADMIN_CODE = 4210
     }
 
@@ -499,6 +507,55 @@ class MainActivity : FlutterActivity() {
                         this,
                         result
                     )
+                }
+
+                else -> result.notImplemented()
+            }
+        }
+
+
+        // ===== قناة "الوصول لجميع الملفات" (MANAGE_EXTERNAL_STORAGE) =====
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            MANAGE_STORAGE_CHANNEL
+        ).setMethodCallHandler { call, result ->
+
+            when (call.method) {
+
+                "openSettings" -> {
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                Uri.parse("package:$packageName")
+                            )
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            startActivity(intent)
+                            result.success(true)
+                        } else {
+                            result.success(false)
+                        }
+                    } catch (e: Exception) {
+                        try {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
+                            )
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e2: Exception) {
+                            result.error("ERR", e2.message, null)
+                        }
+                    }
+                }
+
+                "hasPermission" -> {
+                    val has = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        android.os.Environment.isExternalStorageManager()
+                    } else {
+                        true
+                    }
+                    result.success(has)
                 }
 
                 else -> result.notImplemented()

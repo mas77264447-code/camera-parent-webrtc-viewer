@@ -18,14 +18,9 @@ class _PairingScreenState extends State<PairingScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController(text: 'جهاز الطفل');
-  // كود الوالد مطلوب أول مرة بس (لما اليوزر بيتسجل لأول مرة). لو
-  // الحساب موجود بالفعل، السيرفر بيتجاهل الكود ويتحقق من الباسورد بس.
   final _codeController = TextEditingController();
   bool _obscurePassword = true;
   bool _loading = false;
-  // true لحد ما نتأكد إن مفيش تسجيل دخول محفوظ قبل كده - بنسيب الشاشة
-  // فاضية (Splash بسيط) في الوقت ده عشان مايبانش فورم الدخول للحظة
-  // واحدة ثم يختفي فجأة لو كان فيه بيانات محفوظة.
   bool _checkingSavedLogin = true;
   String? _error;
 
@@ -36,8 +31,6 @@ class _PairingScreenState extends State<PairingScreen> {
     _checkSavedLogin();
   }
 
-  // لو الجهاز مسجل دخول قبل كده (فيه device_token/session_id محفوظين)،
-  // نروح على طول لشاشة البث من غير ما نعرض فورم اليوزر والباسورد تاني.
   Future<void> _checkSavedLogin() async {
     final prefs = await SharedPreferences.getInstance();
     final isPaired = prefs.getBool('is_paired') ?? false;
@@ -86,8 +79,8 @@ class _PairingScreenState extends State<PairingScreen> {
       setState(() => _error = 'أدخل اسم المستخدم');
       return;
     }
-    if (password.length < 4) {
-      setState(() => _error = 'كلمة المرور لازم تكون 4 أحرف على الأقل');
+    if (password.length < 8) {
+      setState(() => _error = 'كلمة المرور لازم تكون 8 أحرف على الأقل');
       return;
     }
 
@@ -156,10 +149,13 @@ class _PairingScreenState extends State<PairingScreen> {
       );
     }
 
-    return WillPopScope(
-      onWillPop: () async {
-        WakelockPlus.disable();
-        return true;
+    // ✅ إصلاح: استخدام PopScope بدل WillPopScope المهجور
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          WakelockPlus.disable();
+        }
       },
       child: Scaffold(
         backgroundColor: const Color(0xfff1f5ff),
@@ -240,10 +236,12 @@ class _PairingScreenState extends State<PairingScreen> {
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: _loading ? null : _register,
-                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
+                    style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.all(16)),
                     child: _loading
                         ? const SizedBox(
-                            height: 20, width: 20,
+                            height: 20,
+                            width: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Text('دخول'),

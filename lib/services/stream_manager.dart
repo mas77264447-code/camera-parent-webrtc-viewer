@@ -28,6 +28,7 @@ class StreamManager {
       peerConnections = {};
 
   final Map<String, Future<void> Function()> _recoveryHandlers = {};
+  bool _reconnectInFlight = false;
 
   void registerPeerConnection({
     required String viewerId,
@@ -276,23 +277,15 @@ class StreamManager {
 
 
   Future<void> reconnect() async {
-
-
-    if(!running) return;
-
-
-    await Future.delayed(
-      const Duration(seconds:3)
-    );
-
-
-    try{
-
-      await connectWebSocket();
-
-    }catch(_){}
-
-
+    if (!running || _reconnectInFlight) return;
+    _reconnectInFlight = true;
+    try {
+      await reconnectSignaling();
+    } catch (_) {
+      // The caller's RecoveryQueue/heartbeat will retry the single pipeline.
+    } finally {
+      _reconnectInFlight = false;
+    }
   }
 
 
@@ -348,9 +341,18 @@ class StreamManager {
   }
 
   Future<void> verifyStream() async {
-    debugPrint(
-      "Stream health: ${hasActivePeerConnection()}"
-    );
+    debugPrint("Stream health: ${hasActivePeerConnection()}");
+  }
+
+  /// Single recovery entry point used by network, heartbeat and UI recovery.
+  /// Keeping these steps in one method prevents multiple subsystems from
+  /// opening competing signaling/ICE recovery cycles.
+  Future<void> recoverSession() async {
+    if (!running) return;
+    await reconnect();
+    await restoreSessionAndIce();
+    await recoverWebRTC();
+    await verifyStream();
   }
 
   Future<void> stopMedia() async {

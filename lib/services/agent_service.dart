@@ -1,13 +1,9 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
-import 'recovery_queue.dart';
-import 'stream_manager.dart';
-import 'stability_controller.dart';
+import 'stream_service.dart';
 
-/// Background recovery coordinator.
-///
-/// Important: the actual WebSocket/PeerConnections are owned by
-/// CameraStreamScreen. Do not create a second signaling WebSocket here.
+/// Heartbeat service — يتحقق كل 20 ثانية من صحة StreamService.
 class AgentService {
   AgentService._();
   static final AgentService instance = AgentService._();
@@ -16,21 +12,18 @@ class AgentService {
   bool running = false;
   bool _heartbeatInFlight = false;
 
-  final StreamManager streamManager = StreamManager.instance;
-  final StabilityController stability = StabilityController.instance;
-
   void start() {
     if (running) return;
     running = true;
-    stability.start();
 
     _heartbeat?.cancel();
     _heartbeat = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(seconds: 20),
       (_) => heartbeat(),
     );
 
     unawaited(heartbeat());
+    debugPrint('[AgentService] started, heartbeat every 20s');
   }
 
   Future<void> heartbeat() async {
@@ -38,18 +31,10 @@ class AgentService {
     _heartbeatInFlight = true;
 
     try {
-      await streamManager.closeDeadConnections();
-
-      // CameraStreamScreen registers the real PeerConnections here.
-      // Its recovery handler owns the real WebSocket and rebuilds the PC.
-      if (streamManager.peerConnections.isNotEmpty &&
-          !streamManager.hasActivePeerConnection()) {
-        await RecoveryQueue.instance.enqueue(() async {
-          await streamManager.recoverWebRTC();
-        });
-      }
-    } catch (_) {
-      // Recovery is retried on the next heartbeat or network event.
+      // ✅ اجعل StreamService يتحقق من حالة WS بنفسه
+      await StreamService.instance.ensureHealthy();
+    } catch (e) {
+      debugPrint('[AgentService] heartbeat error: $e');
     } finally {
       _heartbeatInFlight = false;
     }
@@ -57,18 +42,7 @@ class AgentService {
 
   void stop() {
     running = false;
-    stability.stop();
     _heartbeat?.cancel();
     _heartbeat = null;
-  }
-}
-
-extension AgentRecoveryQueueIntegration on AgentService {
-  Future<void> runWebRTCRecovery(dynamic streamManager) async {
-    await RecoveryQueue.instance.enqueue(() async {
-      // This intentionally delegates to the real registered recovery
-      // handlers in CameraStreamScreen instead of opening a second WS.
-      await streamManager.recoverWebRTC();
-    });
   }
 }

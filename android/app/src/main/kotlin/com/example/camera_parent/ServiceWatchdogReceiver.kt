@@ -6,30 +6,29 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 
-class BootReceiver : BroadcastReceiver() {
+class ServiceWatchdogReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        if (intent.action != ServiceWatchdog.ACTION) return
+        Log.d("ServiceWatchdog", "Receiver triggered")
+
+        ServiceWatchdog.scheduleNext(context)
 
         val enabled = context
             .getSharedPreferences("camera_parent_service", Context.MODE_PRIVATE)
             .getBoolean("enabled", false)
-
         if (!enabled) return
 
         try {
-            val service = Intent(context, StreamForegroundService::class.java)
+            val serviceIntent = Intent(context, StreamForegroundService::class.java)
                 .setAction(StreamForegroundService.ACTION_START)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(service)
+                context.startForegroundService(serviceIntent)
             } else {
-                context.startService(service)
+                context.startService(serviceIntent)
             }
-
-            // ✅ جدول watchdog بعد الإقلاع بـ 60 ثانية
-            ServiceWatchdog.scheduleNext(context, 60_000L)
-
+            Log.d("ServiceWatchdog", "Service restart requested")
         } catch (e: Exception) {
-            Log.w("CameraParent", "Unable to restore foreground service after boot", e)
+            Log.e("ServiceWatchdog", "Restart failed: ${e.message}", e)
         }
     }
 }

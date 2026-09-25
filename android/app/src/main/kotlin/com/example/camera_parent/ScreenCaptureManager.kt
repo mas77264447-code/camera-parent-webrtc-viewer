@@ -6,106 +6,40 @@ import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import io.flutter.plugin.common.MethodChannel
 
+/**
+ * يدير طلب إذن MediaProjection من أندرويد.
+ * ملاحظة: flutter_webrtc يُدير التقاط الشاشة فعلياً عبر getDisplayMedia،
+ * هذا الملف فقط يعرض حوار الإذن ويرجع النتيجة للـ Flutter.
+ */
 object ScreenCaptureManager {
 
-    const val REQUEST_CODE = 9001
+    const val REQUEST_CODE = 7531
 
     private var pendingResult: MethodChannel.Result? = null
 
-    var resultCode: Int = Activity.RESULT_CANCELED
-        private set
+    fun request(activity: Activity, result: MethodChannel.Result) {
+        try {
+            val pm = activity.getSystemService(Context.MEDIA_PROJECTION_SERVICE)
+                    as MediaProjectionManager
+            val intent = pm.createScreenCaptureIntent()
 
-    var projectionData: Intent? = null
-        private set
-
-
-    fun request(
-        context: Context,
-        result: MethodChannel.Result
-    ) {
-
-        // إذا كان الإذن موجود أثناء تشغيل التطبيق
-        if (
-            projectionData != null &&
-            resultCode == Activity.RESULT_OK
-        ) {
-            result.success("granted")
-            return
-        }
-
-
-        val manager =
-            context.getSystemService(
-                Context.MEDIA_PROJECTION_SERVICE
-            ) as MediaProjectionManager
-
-
-        pendingResult = result
-
-
-        val intent =
-            manager.createScreenCaptureIntent()
-
-
-        if (context is Activity) {
-
-            context.startActivityForResult(
-                intent,
-                REQUEST_CODE
-            )
-
-        } else {
-
-            pendingResult = null
-
-            result.success("denied")
+            pendingResult = result
+            activity.startActivityForResult(intent, REQUEST_CODE)
+        } catch (e: Exception) {
+            result.error("SCREEN_CAPTURE_ERROR", e.message ?: "unknown", null)
         }
     }
 
-
-    fun onResult(
-        resultCode: Int,
-        data: Intent?
-    ) {
-
-        if (
-            resultCode == Activity.RESULT_OK &&
-            data != null
-        ) {
-
-            this.resultCode = resultCode
-            this.projectionData = data
-
-            pendingResult?.success(
-                "granted"
-            )
-
-        } else {
-
-            pendingResult?.success(
-                "denied"
-            )
-        }
-
-
+    fun onResult(resultCode: Int, data: Intent?) {
+        val r = pendingResult
         pendingResult = null
-    }
 
+        if (r == null) return
 
-    fun clear() {
-
-        projectionData = null
-
-        resultCode =
-            Activity.RESULT_CANCELED
-
-        pendingResult = null
-    }
-
-
-    fun hasPermission(): Boolean {
-
-        return projectionData != null &&
-                resultCode == Activity.RESULT_OK
+        if (resultCode == Activity.RESULT_OK && data != null) {
+            r.success("granted")
+        } else {
+            r.success("denied")
+        }
     }
 }

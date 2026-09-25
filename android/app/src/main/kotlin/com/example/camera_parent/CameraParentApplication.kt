@@ -39,6 +39,13 @@ class CameraParentApplication : Application() {
             DartExecutor.DartEntrypoint.createDefault()
         )
 
+        // إصلاح: قناة "camera_parent/connectivity" وNetworkConnectivityListener
+        // كانا معرَّفين لكن لا أحد يستدعيهما أبداً، فتغييرات الشبكة
+        // (فقدان/عودة الإنترنت) كانت لا تصل إلى Dart إطلاقاً.
+        ConnectivityChannel.setup(flutterEngine)
+        NetworkConnectivityListener(applicationContext) { online ->
+            ConnectivityChannel.sendNetworkState(online)
+        }.start()
 
         AppHolder.engine = flutterEngine
 
