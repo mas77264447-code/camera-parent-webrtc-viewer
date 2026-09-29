@@ -133,7 +133,7 @@ class StreamService {
     if (!_foregroundServiceStarted) {
       try {
         const fsChannel = MethodChannel('camera_parent/foreground_service');
-        await fsChannel.invokeMethod('start');
+        await fsChannel.invokeMethod('start', {'mode': 'camera'});
         const batChannel = MethodChannel('camera_parent/battery_optimization');
         await batChannel.invokeMethod('requestBatteryOptimizationExemption');
         _foregroundServiceStarted = true;
@@ -356,7 +356,10 @@ class StreamService {
     ConnectionStateManager.instance.update(ConnectionStatus.reconnecting);
     _reconnectTimer?.cancel();
     _reconnectAttempts++;
-    final delay = Duration(seconds: math.min(15, 2 * _reconnectAttempts));
+    final exp = math.pow(2, _reconnectAttempts).toInt();
+    final seconds = math.min(30, exp);
+    final delay = Duration(seconds: seconds);
+    debugPrint('[StreamService] reconnect in ${seconds}s (attempt=$_reconnectAttempts)');
 
     _reconnectTimer = Timer(delay, () {
       _reconnectTimer = null;
@@ -367,7 +370,16 @@ class StreamService {
   void _handleMessage(dynamic message) {
     if (!_running) return;
     try {
-      final data = jsonDecode(message as String);
+      final String text;
+      if (message is String) {
+        text = message;
+      } else if (message is List<int>) {
+        text = utf8.decode(message, allowMalformed: true);
+      } else {
+        debugPrint('[StreamService] unknown msg type: ${message.runtimeType}');
+        return;
+      }
+      final data = jsonDecode(text);
       final type = data['type'] as String?;
       
       // ✅ إصلاح: طباعة كل رسالة واردة للتشخيص

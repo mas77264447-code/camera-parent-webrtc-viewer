@@ -1,3 +1,4 @@
+import 'services/service_agent_channel.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -35,6 +36,7 @@ void main() {
     },
   );
 
+  ServiceAgentChannel.register();
   runApp(const CameraParentApp());
 }
 
